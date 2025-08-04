@@ -6,7 +6,9 @@ import datetime
 import sys
 from langchain_openai import OpenAI
 
-
+import sys
+__import__('pysqlite3')
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 st.set_page_config(page_icon="✈️", layout="wide")
 
 
