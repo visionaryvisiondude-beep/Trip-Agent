@@ -15,4 +15,3 @@ pydantic
 python-dotenv
 langchain-openai
 pysqlite3-binary
-sqlite3
