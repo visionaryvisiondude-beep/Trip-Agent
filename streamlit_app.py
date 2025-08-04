@@ -1,8 +1,7 @@
 
 import sys
 __import__('pysqlite3')
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-st.set_page_config(page_icon="✈️", layout="wide")
+
 from crewai import Crew, LLM
 from trip_agents import TripAgents, StreamToExpander
 from trip_tasks import TripTasks
@@ -11,7 +10,8 @@ import datetime
 import sys
 from langchain_openai import OpenAI
 
-
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+st.set_page_config(page_icon="✈️", layout="wide")
 def icon(emoji: str):
     """Shows an emoji as a Notion-style page icon."""
     st.write(
