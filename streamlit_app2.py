@@ -3,6 +3,7 @@ import requests
 from datetime import datetime, date
 import json
 import time
+import re
 
 # Page configuration
 st.set_page_config(
@@ -59,8 +60,86 @@ st.markdown("""
         border: 1px solid #f5c6cb;
         margin: 1rem 0;
     }
+    .itinerary-section {
+        background-color: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+        border-left: 4px solid #1E88E5;
+    }
+    .day-header {
+        background-color: #e3f2fd;
+        padding: 1rem;
+        border-radius: 6px;
+        margin: 1rem 0;
+        border-left: 3px solid #1976d2;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# Function to clean and format the itinerary text
+def format_itinerary(text):
+    """Clean and format the itinerary text for better display"""
+    if not text:
+        return "No itinerary data available."
+    
+    # Convert to string if it's not already
+    text = str(text)
+    
+    # Remove any extra whitespace and normalize line breaks
+    text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)
+    text = text.strip()
+    
+    # If it looks like it might be markdown, try to clean it up
+    if any(marker in text for marker in ['#', '**', '*', '-', '1.', '2.']):
+        return text
+    
+    # If it's plain text, add some basic formatting
+    lines = text.split('\n')
+    formatted_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Check if line looks like a header (all caps, or starts with Day, etc.)
+        if (line.isupper() and len(line) < 50) or line.startswith(('Day ', 'DAY ')):
+            formatted_lines.append(f"## {line}")
+        # Check if line looks like a sub-header
+        elif any(line.startswith(prefix) for prefix in ['Morning:', 'Afternoon:', 'Evening:', 'Night:']):
+            formatted_lines.append(f"### {line}")
+        # Check if line looks like a list item
+        elif line.startswith(('- ', '• ', '* ')) or re.match(r'^\d+\.', line):
+            formatted_lines.append(line)
+        # Regular paragraph
+        else:
+            formatted_lines.append(line)
+    
+    return '\n\n'.join(formatted_lines)
+
+# Function to display itinerary in sections
+def display_formatted_itinerary(itinerary_text):
+    """Display the itinerary with better formatting and sections"""
+    
+    # Try to split into logical sections
+    sections = re.split(r'\n(?=#{1,3}\s)', itinerary_text)
+    
+    for section in sections:
+        if not section.strip():
+            continue
+            
+        # Check if this is a day section
+        if re.match(r'^#{1,3}\s*(Day\s*\d+|DAY\s*\d+)', section, re.IGNORECASE):
+            with st.container():
+                st.markdown(f'<div class="day-header">', unsafe_allow_html=True)
+                st.markdown(section)
+                st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            with st.container():
+                st.markdown(f'<div class="itinerary-section">', unsafe_allow_html=True)
+                st.markdown(section)
+                st.markdown('</div>', unsafe_allow_html=True)
 
 # Initialize session state
 if 'api_response' not in st.session_state:
@@ -79,7 +158,7 @@ with st.sidebar:
     # API endpoint configuration
     api_base_url = st.text_input(
         "API Base URL",
-        value="https://trip-agent.onrender.com/",
+        value="https://trip-agent.onrender.com",
         help="The base URL of your VacAIgent API"
     )
     
@@ -94,6 +173,17 @@ with st.sidebar:
                 st.error(f"❌ API health check failed: {health_response.status_code}")
         except requests.exceptions.RequestException as e:
             st.error(f"❌ Failed to connect to API: {str(e)}")
+    
+    st.divider()
+    
+    # Display options
+    st.header("🎨 Display Options")
+    
+    display_mode = st.radio(
+        "Choose display format:",
+        ["Enhanced Formatting", "Raw Markdown", "Plain Text"],
+        help="Select how you want the itinerary to be displayed"
+    )
     
     st.divider()
     
@@ -219,7 +309,10 @@ if st.session_state.loading:
                 st.rerun()
             else:
                 st.session_state.loading = False
-                error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+                try:
+                    error_detail = response.json().get('detail', 'Unknown error')
+                except:
+                    error_detail = response.text
                 st.error(f"❌ API Error ({response.status_code}): {error_detail}")
                 
         except requests.exceptions.Timeout:
@@ -245,20 +338,41 @@ if st.session_state.api_response:
         itinerary = response_data.get('itinerary', '')
         if itinerary:
             # Create tabs for better organization
-            tab1, tab2 = st.tabs(["📖 Full Itinerary", "💾 Export Options"])
+            tab1, tab2, tab3 = st.tabs(["📖 Full Itinerary", "🔍 Debug View", "💾 Export Options"])
             
             with tab1:
-                st.markdown(itinerary)
+                # Display based on selected mode
+                if display_mode == "Enhanced Formatting":
+                    formatted_itinerary = format_itinerary(itinerary)
+                    display_formatted_itinerary(formatted_itinerary)
+                elif display_mode == "Raw Markdown":
+                    st.markdown(itinerary)
+                else:  # Plain Text
+                    st.text(itinerary)
             
             with tab2:
+                st.subheader("🔍 Raw API Response")
+                st.write("**Response Type:**", type(itinerary).__name__)
+                st.write("**Response Length:**", len(str(itinerary)))
+                
+                # Show first 500 characters of raw response
+                st.write("**First 500 characters:**")
+                st.code(str(itinerary)[:500] + "..." if len(str(itinerary)) > 500 else str(itinerary))
+                
+                # Show the full raw response in an expander
+                with st.expander("View Full Raw Response"):
+                    st.code(str(itinerary))
+            
+            with tab3:
                 col_download1, col_download2 = st.columns(2)
                 
                 with col_download1:
                     # Download as text file
+                    download_text = format_itinerary(itinerary) if display_mode == "Enhanced Formatting" else str(itinerary)
                     st.download_button(
                         label="📄 Download as Text",
-                        data=itinerary,
-                        file_name=f"trip_itinerary_{destination.replace(' ', '_')}_{start_date}.txt",
+                        data=download_text,
+                        file_name=f"trip_itinerary_{destination.replace(' ', '_') if destination else 'unknown'}_{start_date if 'start_date' in locals() else 'unknown'}.txt",
                         mime="text/plain"
                     )
                 
@@ -268,7 +382,7 @@ if st.session_state.api_response:
                     st.download_button(
                         label="📊 Download as JSON",
                         data=json_data,
-                        file_name=f"trip_data_{destination.replace(' ', '_')}_{start_date}.json",
+                        file_name=f"trip_data_{destination.replace(' ', '_') if destination else 'unknown'}_{start_date if 'start_date' in locals() else 'unknown'}.json",
                         mime="application/json"
                     )
                 
