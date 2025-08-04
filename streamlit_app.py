@@ -1,3 +1,8 @@
+
+import sys
+__import__('pysqlite3')
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+st.set_page_config(page_icon="✈️", layout="wide")
 from crewai import Crew, LLM
 from trip_agents import TripAgents, StreamToExpander
 from trip_tasks import TripTasks
@@ -5,11 +10,6 @@ import streamlit as st
 import datetime
 import sys
 from langchain_openai import OpenAI
-
-import sys
-__import__('pysqlite3')
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-st.set_page_config(page_icon="✈️", layout="wide")
 
 
 def icon(emoji: str):
